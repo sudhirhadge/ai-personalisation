@@ -14,6 +14,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const config = require('./config');
 const sessionsRouter = require('./routes/sessions');
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./swagger/swagger");
 
 const app = express();
 
@@ -51,6 +53,12 @@ app.get('/health', (req, res) => {
         environment: config.nodeEnv,
     });
 });
+
+app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec)
+);
 
 // Root endpoint
 app.get('/', (req, res) => {
