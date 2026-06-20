@@ -8,6 +8,10 @@ node_modules/
 client/build/
 server/build/
 
+# Uploads directory (should NOT be in Git)
+uploads/
+uploads/originals/
+
 # Logs
 *.log
 

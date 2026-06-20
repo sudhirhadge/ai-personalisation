@@ -74,6 +74,44 @@ export const sessionApi = {
         const response = await api.get('/sessions/me');
         return response;
     },
+
+
 };
+
+/**
+ * Upload API methods
+ */
+export const imageApi = {
+    /**
+     * Upload image for personalization session
+     * POST /sessions/me/upload
+     * JWT token automatically attached by interceptor
+     * @param {File} image - Image file
+     * @returns {Promise<Object>}
+     */
+    uploadImage: async (image) => {
+        const formData = new FormData();
+        formData.append('image', image);
+
+        const response = await api.post('/sessions/me/upload', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response;
+    },
+
+    /**
+     * Delete uploaded image
+     * DELETE /sessions/me/image
+     * JWT token automatically attached by interceptor
+     * @returns {Promise<Object>}
+     */
+    deleteImage: async () => {
+        const response = await api.delete('/sessions/me/image');
+        return response;
+    },
+};
+
 
 export default api;

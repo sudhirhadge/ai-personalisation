@@ -13,9 +13,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const config = require('./config');
-const sessionsRouter = require('./routes/sessions');
+const sessionsRouter = require('./routes/sessions'); // phase 1: session routes
+const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger/swagger");
+const path = require('path'); // For serving static files (uploads)
 
 const app = express();
 
@@ -41,8 +43,13 @@ if (config.nodeEnv === 'development') {
     app.use(morgan('combined'));
 }
 
-// API Routes
+// Phase 1: Session routes for creating and managing personalization sessions
 app.use('/api/v1/sessions', sessionsRouter);
+// Phase 2: Storage routes for image upload/delete
+app.use('/api/v1/sessions/me', storageRouter);
+
+// Serve uploaded files statically (for frontend access)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
