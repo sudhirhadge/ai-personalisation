@@ -22,8 +22,9 @@ router.post('/', createSession);
 
 /**
  * GET /api/v1/sessions/me
- * Get current session using JWT token
+ * Get current session using JWT token from Authorization header
  * Protected endpoint (auth required)
+ * This will get called on page load of PersonalizeNow page to fetch the session details. 
  */
 router.get('/me', authenticate, getCurrentSession);
 

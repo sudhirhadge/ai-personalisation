@@ -316,7 +316,7 @@ class EmailService {
             to: session.email,
             email: session.email,
             productSku: session.productSku,
-            personalizationLink: `${config.frontendUrl}/personalize-now?token=${jwtToken}`,
+            personalizationLink: session.personalizationLink,
         };
 
         // Line 28: Send email via SMTP

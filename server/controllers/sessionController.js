@@ -114,7 +114,7 @@ async function createSession(req, res, next) {
  */
 async function getCurrentSession(req, res, next) {
     try {
-        // Token was already verified by auth middleware
+        // Token was already verified by auth middleware; and user info is attached to req.user to avoid re-verifying the token here. This keeps the controller focused on session retrieval logic.
         const { sessionId } = req.user;
 
         const session = await sessionRepository.findById(sessionId);

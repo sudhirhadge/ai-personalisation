@@ -22,7 +22,7 @@ class TokenService {
             sessionId,
             type: 'personalization',
         };
-
+        // this payload will be encoded in the JWT token and can be decoded later to verify the session
         const token = jwt.sign(payload, config.jwt.secret, {
             expiresIn: config.jwt.expiresIn,
         });
@@ -45,6 +45,7 @@ class TokenService {
      */
     verifyToken(token) {
         try {
+            // the decoded payload will contain the sessionId and type, which can be used to validate the session
             const decoded = jwt.verify(token, config.jwt.secret);
             return decoded;
         } catch (error) {
