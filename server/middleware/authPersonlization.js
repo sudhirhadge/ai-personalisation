@@ -17,6 +17,7 @@ function authenticate(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
 
+        // validate presence and format of Authorization header
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({
                 success: false,
@@ -26,6 +27,7 @@ function authenticate(req, res, next) {
 
         const token = authHeader.substring(7); // Remove 'Bearer ' prefix
         const decoded = tokenService.verifyToken(token);
+        // for example, decoded = { sessionId: '...', email: '...', iat: 1234567890, exp: 1234567890 }
 
         // Attach decoded user info to request
         req.user = decoded;

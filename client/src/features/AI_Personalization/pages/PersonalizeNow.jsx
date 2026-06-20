@@ -1,17 +1,17 @@
 /**
  * Personalize Now Page
- * Placeholder for Phase 2 (image upload)
- * Shows token from URL and loads session
+ * Phase 2: Image upload UI
  * 
  * Architectural Decision:
- * - Preparing for Phase 2 implementation
  * - Extracts token from URL query parameters
  * - Validates session before showing upload UI
+ * - Image preview before upload
+ * - Success state shows uploaded image
  * - Tailwind classes for styling
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { sessionApi } from '../services/api';
+import { imageApi, sessionApi } from '../services/api';
 
 function PersonalizeNow() {
     const [searchParams] = useSearchParams();
@@ -22,6 +22,12 @@ function PersonalizeNow() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Upload state
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
+
     useEffect(() => {
         if (!token) {
             setError('Invalid or missing token');
@@ -29,7 +35,6 @@ function PersonalizeNow() {
             return;
         }
 
-        // FIX: Store the actual JWT token from URL (not sessionId)
         localStorage.setItem('jwtToken', token);
 
         const loadSession = async () => {
@@ -47,6 +52,94 @@ function PersonalizeNow() {
 
         loadSession();
     }, [token]);
+
+    // Handle image selection
+    const handleImageSelect = (e) => {
+        const file = e.target.files[0];
+
+        if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            setUploadError('Invalid file type. Only JPG, PNG, and WEBP are allowed.');
+            return;
+        }
+
+        // Validate file size (10MB max)
+        if (file.size > 10 * 1024 * 1024) {
+            setUploadError(`File too large. Maximum size is 10MB.`);
+            return;
+        }
+
+        setSelectedImage(file);
+        setUploadError(null);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Handle upload
+    const handleUpload = async () => {
+        if (!selectedImage) {
+            setUploadError('Please select an image first.');
+            return;
+        }
+
+        setIsUploading(true);
+        setUploadError(null);
+
+        try {
+            const response = await imageApi.uploadImage(selectedImage);
+
+            if (response.success) {
+                // Update session with new data
+                setSession({
+                    ...session,
+                    status: response.data.status,
+                    originalImageUrl: response.data.originalImageUrl,
+                    originalImageName: response.data.originalImageName,
+                });
+
+                // Clear selection
+                setSelectedImage(null);
+                setImagePreview(null);
+            }
+        } catch (err) {
+            setUploadError(err.message || 'Upload failed. Please try again.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    // Handle delete
+    const handleDelete = async () => {
+        if (!session.originalImageUrl) return;
+
+        try {
+            const response = await imageApi.deleteImage();
+
+            if (response.success) {
+                // Update session
+                setSession({
+                    ...session,
+                    status: 'CREATED',
+                    originalImageUrl: null,
+                    originalImageName: null,
+                });
+
+                // Clear preview
+                setImagePreview(null);
+                setSelectedImage(null);
+            }
+        } catch (err) {
+            setUploadError('Delete failed. Please try again.');
+        }
+    };
 
     if (isLoading) {
         return (
@@ -105,19 +198,6 @@ function PersonalizeNow() {
                         </p>
                     </div>
 
-                    {/* Info Alert */}
-                    <div className="alert alert-info mb-6">
-                        <div className="flex items-start gap-3">
-                            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            <div>
-                                <strong className="block">Phase 2 Coming Soon!</strong>
-                                <span>This is where you'll upload your image for AI personalization.</span>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Status */}
                     <div className="mb-6">
                         <p className="text-gray-700">
@@ -126,6 +206,71 @@ function PersonalizeNow() {
                                 {session.status}
                             </span>
                         </p>
+                    </div>
+
+                    {/* Upload Section */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                            Upload Your Image
+                        </h2>
+
+                        {/* Image Preview */}
+                        {imagePreview && (
+                            <div className="mb-4">
+                                <img
+                                    src={imagePreview}
+                                    alt="Preview"
+                                    className="w-full h-auto rounded-lg shadow-md max-h-64"
+                                />
+                            </div>
+                        )}
+
+                        {/* Upload Error */}
+                        {uploadError && (
+                            <div className="alert alert-error mb-4">
+                                <span>{uploadError}</span>
+                            </div>
+                        )}
+
+                        {/* File Input */}
+                        <div className="mb-4">
+                            <label className="block w-full">
+                                <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={handleImageSelect}
+                                    className="block w-full text-sm text-gray-500
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-full file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-primary-600 file:text-white
+                                        hover:file:bg-primary-700
+                                    "
+                                />
+                            </label>
+                            <p className="mt-2 text-sm text-gray-500">
+                                Accepted: JPG, PNG, WEBK (max 10MB)
+                            </p>
+                        </div>
+
+                        {/* Upload/Delete Buttons */}
+                        {session.originalImageUrl ? (
+                            <button
+                                className="btn-secondary w-full mb-2"
+                                onClick={handleDelete}
+                                disabled={isUploading}
+                            >
+                                Delete Uploaded Image
+                            </button>
+                        ) : (
+                            <button
+                                className="btn-primary w-full"
+                                onClick={handleUpload}
+                                disabled={!selectedImage || isUploading}
+                            >
+                                {isUploading ? 'Uploading...' : 'Upload Image'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Back Button */}

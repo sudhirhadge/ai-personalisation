@@ -33,6 +33,7 @@ const config = {
 
     // Frontend URL for email links
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    apiURL: process.env.API_URL || 'http://localhost:5000',
 };
 
 // Validate required environment variables in production

@@ -64,6 +64,18 @@ class SessionRepository {
         );
     }
 
+    async updateStatusById(sessionId, status, updates = {}) {
+        return await Session.findByIdAndUpdate(
+            sessionId,
+            {
+                status,
+                ...updates,
+                updatedAt: new Date()
+            },
+            { new: true }
+        );
+    }
+
     /**
      * Update session with AI job data
      * @param {string} token - JWT token

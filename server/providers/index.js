@@ -8,6 +8,12 @@
  */
 const config = require('../config');
 const { NodemailerEmailProvider } = require('./emailProvider');
+const { LocalStorageProvider } = require('./localStorageProvider');
+
+// Future providers (to be implemented in later phases)
+// class S3StorageProvider { }
+// class ResendEmailProvider { }
+// class OpenAIProvider { }
 
 // Future providers (to be implemented in later phases)
 // class S3StorageProvider { }
@@ -28,8 +34,9 @@ function getEmailProvider() {
  * Storage Provider Factory (placeholder for Phase 2)
  */
 function getStorageProvider() {
-    // Will be implemented in Phase 2
-    return null;
+    // ✅ Phase 2: Use LocalStorageProvider for development
+    // Later phases will use S3StorageProvider in production
+    return new LocalStorageProvider();
 }
 
 /**

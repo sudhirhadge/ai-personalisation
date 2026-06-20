@@ -23,6 +23,7 @@
     "mongodb": "^6.21.0",
     "mongoose": "^8.8.2",
     "morgan": "^1.10.0",
+    "multer": "^2.2.0",
     "nodemailer": "^8.0.10",
     "npm": "^11.12.1",
     "supertest": "^7.0.0",
