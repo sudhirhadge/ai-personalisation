@@ -14,9 +14,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const config = require('./config');
 const sessionsRouter = require('./routes/sessions'); // phase 1: session routes
-const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger/swagger");
+const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const path = require('path'); // For serving static files (uploads)
 
 const app = express();
