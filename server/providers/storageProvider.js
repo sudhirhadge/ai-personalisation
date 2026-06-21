@@ -264,7 +264,7 @@ class LocalStorageProvider extends StorageProvider {
             const fileName = url.split('/').pop();
             const filePath = path.join(this.uploadDir, fileName);
 
-            await fs.unlinkSync(filePath);
+            fs.unlinkSync(filePath);
             return true;
         } catch (error) {
             if (error.code === 'ENOENT') {
@@ -290,7 +290,7 @@ class LocalStorageProvider extends StorageProvider {
 
             return {
                 size: stats.size,
-                mimeType: stats.mtime,
+                mimeType: stats.mtime, // Note: This is a placeholder. In a real implementation, you would store the MIME type when uploading the file and retrieve it here.
                 uploadedAt: stats.birthtime.toISOString()
             };
         } catch (error) {
