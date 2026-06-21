@@ -11,6 +11,9 @@
 const mongoose = require('mongoose');
 const app = require('./app');
 const config = require('./config');
+const initStorage = require('./bootstrap/initStorage');
+
+
 
 // Connect to MongoDB
 async function connectDatabase() {
@@ -25,6 +28,7 @@ async function connectDatabase() {
 
 // Start server
 async function startServer() {
+    initStorage();
     await connectDatabase();
 
     const server = app.listen(config.port, () => {

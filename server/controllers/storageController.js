@@ -47,11 +47,12 @@ Calls callback
 
 Only then does your code continue.
 */
+
 const uploadMiddleware = multer({
     storage: multer.diskStorage({
-        destination: (req, res, cb) => {
+        destination: (req, file, cb) => {
             const uploadDir = path.join(process.cwd(), 'uploads', 'originals');
-            cb(null, uploadDir); // "Where should I save this file?" - multer i aking this question to the diskStorage engine, which then calls this function to determine the destination directory for the uploaded file. The callback cb is called with the upload directory path, allowing multer to save the file in the correct location on the server's filesystem.
+            cb(null, uploadDir); // "Where should I save this file?" - multer is aking this question to the diskStorage engine, which then calls this function to determine the destination directory for the uploaded file. The callback cb is called with the upload directory path, allowing multer to save the file in the correct location on the server's filesystem.
         },
         /* Signature:
             destination(req, file, cb)

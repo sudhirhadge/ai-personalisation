@@ -47,6 +47,36 @@ Local
 S3
 Azure
 Cloudinary
+
+Real-world benefit
+
+Today:
+
+const storageProvider =
+    new LocalStorageProvider();
+
+Tomorrow:
+
+const storageProvider =
+    new S3StorageProvider();
+
+No service code changes.
+
+StorageService
+      ↓
+ StorageProvider
+      ↓
+  LocalStorageProvider
+
+Later
+
+StorageService
+      ↓
+ StorageProvider
+      ↓
+    S3StorageProvider
+
+This is the Dependency Inversion Principle.
 */
 class StorageProvider {
     /**
@@ -89,19 +119,59 @@ class StorageProvider {
  * - Phase 5 will replace with S3StorageProvider
  */
 const fs = require('fs');
-const multer = require('multer');
+// const multer = require('multer');
 const path = require('path');
-// const { StorageProvider } = require('./storageProvider');
 const config = require('../config');
-const { v4: uuidv4 } = require('uuid');
+// const { v4: uuidv4 } = require('uuid');
 
 
 class LocalStorageProvider extends StorageProvider {
     constructor() {
         super();
 
-        // Multer configuration
-        this.uploadMiddleware = multer({
+        // Multer configuration 
+        // move this out of the constructor to avoid re-initializing on every instance creation.
+        // move Multer completely out of the provider. 
+        /*Reason:
+
+            Multer = HTTP/upload parsing concern
+            StorageProvider = file storage concern
+
+            A provider should not know whether the file came from:
+
+            Multer
+            S3 Event
+            CLI Script
+            Queue Worker
+
+            It should only receive: file 
+            Why?
+
+            Imagine tomorrow:
+
+            Case 1: HTTP Upload
+            Browser
+            ↓
+            Multer
+            ↓
+            Provider
+            Case 2: Queue Worker
+            RabbitMQ
+            ↓
+            Provider
+            Case 3: Cron Job
+            Filesystem
+            ↓
+            Provider
+
+            If Multer lives inside Provider:
+
+            Provider now depends on Express/Multer
+
+            which makes no sense for Cases 2 and 3.
+            */
+
+        /* this.uploadMiddleware = multer({
             storage: multer.diskStorage({
                 destination: (req, res, cb) => {
                     const uploadDir = path.join(process.cwd(), 'uploads', 'originals');
@@ -125,12 +195,31 @@ class LocalStorageProvider extends StorageProvider {
                     cb(new Error('Invalid file type. Only JPG, PNG, and WEBP are allowed.'));
                 }
             }
-        });
+        }); */
 
-        // Upload directory
+
+        // Upload directory 
         this.uploadDir = path.join(process.cwd(), 'uploads', 'originals');
-        // ✅ Auto-create upload directory
-        fs.mkdirSync(this.uploadDir, { recursive: true });
+        // Auto-create upload directory
+        //fs.mkdirSync(this.uploadDir, { recursive: true });
+        /*
+            What do production systems do?
+
+            Usually one of these:
+
+            Option 1 (Most common)
+
+            Create directories during application startup.
+            // app.js or server.js
+            fs.mkdirSync(uploadDir, { recursive: true });
+            before server starts.
+            Application boot
+            ↓
+            Create folders
+            ↓
+            Start server
+            I like this most because folder creation is an application concern, not a storage operation.
+        */
     }
 
     /**
@@ -141,8 +230,8 @@ class LocalStorageProvider extends StorageProvider {
      */
     async upload(file, sessionId) {
         try {
-            // Ensure upload directory exists
-            await fs.mkdirSync(this.uploadDir, { recursive: true });
+            // Ensure upload directory exists -> for my every ap it will do this , which is not optimal. We can move this to constructor, so it runs only once when provider is initialized.
+            // await fs.mkdirSync(this.uploadDir, { recursive: true });
 
             const filePath = file.path;
             const fileName = file.filename;
