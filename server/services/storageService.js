@@ -30,7 +30,6 @@ class StorageService {
 
             // Upload file
             const uploadResult = await storageProvider.upload(file, sessionId);
-            console.log('File uploaded to storage:', uploadResult, sessionId);
             // Update session in MongoDB
             const session = await sessionRepository.updateStatusById(
                 sessionId, // Using sessionId (MongoDB _id)
@@ -43,7 +42,6 @@ class StorageService {
                     originalImageUploadedAt: uploadResult.uploadedAt
                 }
             );
-            console.log('Session updated with image info:', session);
 
             // Generate JWT for frontend (in case token changed)
             const jwtToken = tokenService.generateDeepLinkToken(session._id.toString());
