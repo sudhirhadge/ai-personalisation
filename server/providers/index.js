@@ -8,7 +8,7 @@
  */
 const config = require('../config');
 const { NodemailerEmailProvider } = require('./emailProvider');
-const { LocalStorageProvider } = require('./localStorageProvider');
+const { LocalStorageProvider } = require('./storageProvider');
 
 // Future providers (to be implemented in later phases)
 // class S3StorageProvider { }

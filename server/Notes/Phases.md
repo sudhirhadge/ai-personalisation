@@ -171,3 +171,14 @@ Cost estimation for:
 100k users
 1 million users
 Generate only new and modified files.
+
+
+ phases 
+
+- Phase 1: Create a session with email and productSku, save it in MongoDB, generate a JWT deep-link token, set TTL to 7 days, send an email through an EmailProvider abstraction, and build the frontend CreateSession flow with a success screen.
+- Phase 2: Add image upload for the personalized session, introduce a StorageProvider abstraction with LocalStorageProvider, validate files with Multer, store uploads under `uploads/originals`, save image metadata in MongoDB, and add the PersonalizeNow upload UI.
+- Phase 3: Implement mock AI processing, add AIProvider and MockAIProvider, create generate and status endpoints, return a jobId, move session status to PROCESSING, simulate a 15-second job, copy the image to a processed version, and show polling/progress in the frontend.
+- Phase 4: Replace the in-process AI flow with BullMQ, add Redis, introduce a queue-worker architecture, process jobs asynchronously, and keep MongoDB updated through the worker.
+- Phase 5: Make it production-ready with S3StorageProvider, ResendEmailProvider, OpenAIProvider abstraction, health and metrics endpoints, request ID middleware, structured logging, Docker, Railway/Vercel deployment, Mongo Atlas setup, and infrastructure/architecture diagrams.
+
+That is the full phase roadmap.

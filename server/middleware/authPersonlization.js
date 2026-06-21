@@ -28,7 +28,7 @@ function authenticate(req, res, next) {
         const token = authHeader.substring(7); // Remove 'Bearer ' prefix
         const decoded = tokenService.verifyToken(token);
         // for example, decoded = { sessionId: '...', email: '...', iat: 1234567890, exp: 1234567890 }
-
+        // sessionId is nothing but mongoDB _id of the session document. This is used to identify the session in the database and fetch the session data for personalization.
         // Attach decoded user info to request
         req.user = decoded;
 
