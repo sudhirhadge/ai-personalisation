@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { imageApi, sessionApi } from '../services/api';
+import { aiApi, imageApi, sessionApi } from '../services/api';
 
 function PersonalizeNow() {
     const [searchParams] = useSearchParams();
@@ -28,6 +28,11 @@ function PersonalizeNow() {
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
 
+    // AI generation state
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState(null);
+    const [prompt, setPrompt] = useState('');
+    const [isPolling, setIsPolling] = useState(false);
     useEffect(() => {
         if (!token) {
             setError('Invalid or missing token');
@@ -53,7 +58,46 @@ function PersonalizeNow() {
         loadSession();
     }, [token]);
 
-    // Handle image selection
+    // Polling for AI job status
+    useEffect(() => {
+        if (session?.status === 'PROCESSING' && session?.aiJobId) {
+            setIsPolling(true);
+            const pollInterval = setInterval(() => {
+                pollAIStatus(session.aiJobId);
+            }, 3000); // Poll every 3 seconds
+
+            return () => {
+                clearInterval(pollInterval);
+                setIsPolling(false);
+            };
+        }
+    }, [session?.status, session?.aiJobId]);
+
+    const pollAIStatus = async (aiJobId) => {
+        try {
+            const response = await aiApi.getStatus(aiJobId);
+
+            if (response.success) {
+                setSession({
+                    ...session,
+                    status: response.data.status,
+                    processedImageUrl: response.data.processedImageUrl,
+                    aiError: response.data.aiError,
+                });
+
+                if (response.data.status === 'DONE') {
+                    setIsPolling(false);
+                    setGenerateError(null);
+                } else if (response.data.status === 'FAILED') {
+                    setIsPolling(false);
+                    setGenerateError(response.data.aiError || 'AI generation failed');
+                }
+            }
+        } catch (err) {
+            console.error('Poll AI status error:', err);
+        }
+    };
+
     const handleImageSelect = (e) => {
         const file = e.target.files[0];
 
@@ -68,7 +112,7 @@ function PersonalizeNow() {
 
         // Validate file size (10MB max)
         if (file.size > 10 * 1024 * 1024) {
-            setUploadError(`File too large. Maximum size is 10MB.`);
+            setUploadError('File too large. Maximum size is 10MB.');
             return;
         }
 
@@ -130,30 +174,55 @@ function PersonalizeNow() {
                     status: 'CREATED',
                     originalImageUrl: null,
                     originalImageName: null,
+                    originalImageMimeType: null,
+                    originalImageSize: null,
+                    originalImageUploadedAt: null,
+                    processedImageUrl: null,
+                    aiError: null,
                 });
 
                 // Clear preview
-                setImagePreview(null);
                 setSelectedImage(null);
+                setImagePreview(null);
             }
         } catch (err) {
-            setUploadError('Delete failed. Please try again.');
+            setUploadError(err.message || 'Delete failed. Please try again.');
+        }
+    };
+
+    const handleGenerate = async () => {
+        if (!prompt.trim()) {
+            setGenerateError('Please describe your vision for the AI.');
+            return;
+        }
+
+        setIsGenerating(true);
+        setGenerateError(null);
+
+        try {
+            const response = await aiApi.generateImage(prompt.trim());
+
+            if (response.success) {
+                setSession({
+                    ...session,
+                    status: 'PROCESSING',
+                    aiJobId: response.data.aiJobId,
+                });
+
+                // Polling will start automatically via useEffect
+            }
+        } catch (err) {
+            setGenerateError(err.message || 'AI generation failed. Please try again.');
+            setIsGenerating(false);
         }
     };
 
     if (isLoading) {
         return (
-            <div className="min-h-screen gradient-bg py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-xl mx-auto">
-                    <div className="card text-center">
-                        <div className="flex justify-center mb-6">
-                            <svg className="animate-spin h-10 w-10 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        </div>
-                        <p className="text-gray-600 text-lg">Loading session...</p>
-                    </div>
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading session...</p>
                 </div>
             </div>
         );
@@ -161,131 +230,183 @@ function PersonalizeNow() {
 
     if (error) {
         return (
-            <div className="min-h-screen gradient-bg py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-xl mx-auto">
-                    <div className="card">
-                        <div className="alert alert-error mb-6">
-                            <div className="flex items-center gap-3">
-                                <svg className="w-6 h-6 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
-                                <span>{error}</span>
-                            </div>
-                        </div>
-                        <button
-                            className="btn-primary w-full"
-                            onClick={() => navigate('/')}
-                        >
-                            Create New Session
-                        </button>
-                    </div>
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
+                <div className="text-center">
+                    <div className="text-red-600 text-lg mb-4">❌ {error}</div>
+                    <button
+                        onClick={() => navigate('/')}
+                        className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                    >
+                        Create New Session
+                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen gradient-bg py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-xl mx-auto">
-                <div className="card">
-                    {/* Header */}
-                    <div className="text-center mb-6">
-                        <h1 className="text-3xl font-extrabold gradient-text">
-                            🎨 Personalize Your Product
-                        </h1>
-                        <p className="mt-3 text-gray-600">
-                            Session for: <span className="font-semibold text-gray-900">{session.productSku}</span>
-                        </p>
-                    </div>
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 py-12 px-4">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-purple-900 mb-2">
+                        Personalize Your Product
+                    </h1>
+                    <p className="text-gray-600">
+                        Product: <span className="font-semibold">{session.productSku}</span>
+                        <br />
+                        Status: <span className="font-semibold">{session.status}</span>
+                    </p>
+                </div>
 
-                    {/* Status */}
-                    <div className="mb-6">
-                        <p className="text-gray-700">
-                            Current status:{' '}
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-primary-100 text-primary-800">
-                                {session.status}
-                            </span>
-                        </p>
-                    </div>
+                {/* Upload Section */}
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 className="text-2xl font-semibold text-purple-900 mb-4">
+                        Step 1: Upload Your Image
+                    </h2>
 
-                    {/* Upload Section */}
-                    <div className="mb-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                            Upload Your Image
+                    {!session.originalImageUrl && (
+                        <div className="space-y-4">
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                onChange={handleImageSelect}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+
+                            {uploadError && (
+                                <div className="text-red-600 text-sm">{uploadError}</div>
+                            )}
+
+
+                        </div>
+                    )}
+                    {/* Uploaded Image Preview */}
+                    {(imagePreview || session.originalImageUrl) && (
+                        <div className="space-y-4">
+                            <img
+                                src={imagePreview || session.originalImageUrl}
+                                alt="Uploaded"
+                                className="w-full max-w-md rounded-lg shadow-md"
+                            />
+                            <div className="flex space-x-16">
+                                <button
+                                    onClick={handleUpload}
+                                    disabled={isUploading || !selectedImage}
+                                    className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isUploading ? 'Uploading...' : 'Upload Image'}
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={!session.originalImageUrl}
+                                >
+                                    Delete Uploaded Image
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+
+                {/* AI Generation Section (Only if image uploaded) */}
+                {session.status === 'UPLOADED' && (
+                    <div className="bg-white rounded-xl shadow-lg p-6">
+                        <h2 className="text-2xl font-semibold text-purple-900 mb-4">
+                            Step 2: AI Personalization
                         </h2>
 
-                        {/* Image Preview */}
-                        {imagePreview && (
-                            <div className="mb-4">
-                                <img
-                                    src={imagePreview}
-                                    alt="Preview"
-                                    className="w-full h-auto rounded-lg shadow-md max-h-64"
-                                />
-                            </div>
-                        )}
+                        <div className="space-y-4">
+                            <textarea
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                placeholder="Describe your vision for the AI... (e.g., 'Make it magical with glowing effects and vibrant colors')"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-none h-32 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                disabled={isGenerating || isPolling}
+                            />
 
-                        {/* Upload Error */}
-                        {uploadError && (
-                            <div className="alert alert-error mb-4">
-                                <span>{uploadError}</span>
-                            </div>
-                        )}
+                            {generateError && (
+                                <div className="text-red-600 text-sm">{generateError}</div>
+                            )}
 
-                        {/* File Input */}
-                        <div className="mb-4">
-                            <label className="block w-full">
-                                <input
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    onChange={handleImageSelect}
-                                    className="block w-full text-sm text-gray-500
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-full file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-primary-600 file:text-white
-                                        hover:file:bg-primary-700
-                                    "
-                                />
-                            </label>
-                            <p className="mt-2 text-sm text-gray-500">
-                                Accepted: JPG, PNG, WEBK (max 10MB)
+                            <button
+                                onClick={handleGenerate}
+                                disabled={isGenerating || isPolling || !prompt.trim()}
+                                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isGenerating ? 'Generating...' : 'Generate AI Image'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Processing State */}
+                {session.status === 'PROCESSING' && (
+                    <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-600 border-t-transparent mx-auto mb-4"></div>
+                            <h3 className="text-2xl font-semibold text-purple-900 mb-2">
+                                AI is Generating Your Image...
+                            </h3>
+                            <p className="text-gray-600">
+                                This takes about 30-60 seconds. Please wait...
+                            </p>
+                            {isPolling && (
+                                <p className="text-sm text-purple-600 mt-2">
+                                    Polling for status...
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Success State (DONE) */}
+                {session.status === 'DONE' && session.processedImageUrl && (
+                    <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+                        <div className="text-center">
+                            <div className="text-green-600 text-5xl mb-4">✅</div>
+                            <h3 className="text-2xl font-semibold text-purple-900 mb-4">
+                                Your AI Image is Ready!
+                            </h3>
+
+                            <img
+                                src={session.processedImageUrl}
+                                alt="AI Generated"
+                                className="w-full max-w-md rounded-lg shadow-xl mx-auto mb-4"
+                            />
+
+                            <p className="text-gray-600">
+                                AI Prompt: <span className="font-semibold">{session.aiPrompt}</span>
                             </p>
                         </div>
-
-                        {/* Upload/Delete Buttons */}
-                        {session.originalImageUrl ? (
-                            <button
-                                className="btn-secondary w-full mb-2"
-                                onClick={handleDelete}
-                                disabled={isUploading}
-                            >
-                                Delete Uploaded Image
-                            </button>
-                        ) : (
-                            <button
-                                className="btn-primary w-full"
-                                onClick={handleUpload}
-                                disabled={!selectedImage || isUploading}
-                            >
-                                {isUploading ? 'Uploading...' : 'Upload Image'}
-                            </button>
-                        )}
                     </div>
+                )}
 
-                    {/* Back Button */}
-                    <button
-                        className="btn-secondary w-full"
-                        onClick={() => navigate('/')}
-                    >
-                        <div className="flex items-center justify-center gap-2">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                            Back to Home
+                {/* Failed State */}
+                {session.status === 'FAILED' && (
+                    <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+                        <div className="text-center">
+                            <div className="text-red-600 text-5xl mb-4">❌</div>
+                            <h3 className="text-2xl font-semibold text-red-900 mb-2">
+                                AI Generation Failed
+                            </h3>
+                            <p className="text-gray-600 mb-4">
+                                {session.aiError || 'Something went wrong. Please try again.'}
+                            </p>
+                            <button
+                                onClick={() => {
+                                    setGenerateError(null);
+                                    setPrompt('');
+                                    setSession({ ...session, status: 'UPLOADED', aiJobId: null });
+                                }}
+                                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                            >
+                                Try Again
+                            </button>
                         </div>
-                    </button>
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );

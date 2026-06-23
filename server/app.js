@@ -18,11 +18,22 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger/swagger");
 const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const path = require('path'); // For serving static files (uploads)
+const aiRouter = require('./routes/ai');
+const { aiQueue } = require('./queues/aiQueue'); // Ensure the AI queue is initialized
+
+// Add this route registration:
 
 const app = express();
 
 // Security middleware
-app.use(helmet());
+// app.use(helmet());
+app.use(
+    helmet({
+        crossOriginResourcePolicy: {
+            policy: "cross-origin",
+        },
+    })
+);
 
 // CORS configuration
 app.use(cors({
@@ -47,6 +58,20 @@ if (config.nodeEnv === 'development') {
 app.use('/api/v1/sessions', sessionsRouter);
 // Phase 2: Storage routes for image upload/delete
 app.use('/api/v1/sessions/me', storageRouter);
+
+// for testing the queue, we can add a simple endpoint to enqueue a test job. This is not meant for production use, but can be helpful during development to verify that the queue is working correctly.
+app.get('/health/queue', async (req, res) => {
+    try {
+        await aiQueue.add('test-job', { ping: true });
+        return res.json({ success: true, message: 'Queue test job added' });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+});
+app.use('/api/v1/sessions/me', aiRouter);
 
 // Serve uploaded files statically (for frontend access)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

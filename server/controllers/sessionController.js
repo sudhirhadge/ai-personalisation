@@ -118,25 +118,31 @@ async function getCurrentSession(req, res, next) {
         const { sessionId } = req.user;
 
         const session = await sessionRepository.findById(sessionId);
-
+        console.log('Retrieved session:', session);
         if (!session) {
             return res.status(404).json({
                 success: false,
                 error: 'Session not found',
             });
         }
+        let data = {
+            sessionId: session._id.toString(),
+            email: session.email,
+            productSku: session.productSku,
+            status: session.status,
+            personalizationLink: session.personalizationLink,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+        }
+        if (session.status === 'UPLOADED') {
+            // Include originalImageUrl only if the session has an uploaded image
+            data.originalImageUrl = session.originalImageUrl;
+            data.originalImageName = session.originalImageName;
+        }
 
         res.json({
             success: true,
-            data: {
-                sessionId: session._id.toString(),
-                email: session.email,
-                productSku: session.productSku,
-                status: session.status,
-                personalizationLink: session.personalizationLink,
-                createdAt: session.createdAt,
-                updatedAt: session.updatedAt,
-            },
+            data
         });
     } catch (error) {
         console.error('Get current session error:', error);
