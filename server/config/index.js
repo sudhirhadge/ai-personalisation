@@ -34,6 +34,16 @@ const config = {
     // Frontend URL for email links
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
     apiURL: process.env.API_URL || 'http://localhost:5000',
+    // AI Configuration (Phase 3)
+    huggingfaceApiKey: process.env.HUGGINGFACE_API_KEY || '',
+
+    // Redis Configuration (Upstash - Free tier)
+    // do not change keys here, as the aiQueue.js expects redisConfig to be an object with host, port, password keys. This is designed to be easily passed to ioredis.
+    redisConfig: {
+        host: process.env.REDIS_HOST,
+        port: Number(process.env.REDIS_PORT) || 6379,
+        password: process.env.REDIS_PASSWORD,
+    },
 };
 
 // Validate required environment variables in production
