@@ -7,6 +7,7 @@
  * - Axios with default configuration
  * - JWT token attached automatically for protected routes
  * - Standardized error handling
+ * - Separate exported objects for different features
  */
 import axios from 'axios';
 
@@ -113,5 +114,33 @@ export const imageApi = {
     },
 };
 
+/**
+ * AI API methods (Phase 3)
+ */
+export const aiApi = {
+    /**
+     * Generate AI image
+     * POST /api/v1/sessions/me/generate
+     * JWT token automatically attached by interceptor
+     * @param {string} prompt - User's vision description
+     * @returns {Promise<Object>}
+     */
+    generateImage: async (prompt) => {
+        const response = await api.post('/sessions/me/generate', { prompt });
+        return response;
+    },
+
+    /**
+     * Get AI job status
+     * GET /api/v1/sessions/me/status/:aiJobId
+     * JWT token automatically attached by interceptor
+     * @param {string} aiJobId - AI job ID
+     * @returns {Promise<Object>}
+     */
+    getStatus: async (aiJobId) => {
+        const response = await api.get(`/sessions/me/status/${aiJobId}`);
+        return response;
+    },
+};
 
 export default api;
