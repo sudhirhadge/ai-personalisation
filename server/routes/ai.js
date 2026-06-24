@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { generateAIImage, getAIStatus } = require('../controllers/aiController');
+const { generateAIImage, getAIStatus, generateAIImageToImage } = require('../controllers/aiController');
 const { authenticate } = require('../middleware/authPersonlization');
 
 // All routes require JWT authentication
@@ -15,6 +15,8 @@ router.use(authenticate);
  * Trigger AI image generation
  */
 router.post('/generate', generateAIImage);
+// router.post('/generate', generateAIImageToImage);
+
 
 /**
  * GET /api/v1/sessions/me/status/:aiJobId
