@@ -14,8 +14,8 @@ router.use(authenticate);
  * POST /api/v1/sessions/me/generate
  * Trigger AI image generation
  */
-router.post('/generate', generateAIImage);
-// router.post('/generate', generateAIImageToImage);
+// router.post('/generate', generateAIImage);
+router.post('/generate', generateAIImageToImage);
 
 
 /**

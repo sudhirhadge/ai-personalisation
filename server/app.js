@@ -19,7 +19,7 @@ const swaggerSpec = require("./swagger/swagger");
 const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const path = require('path'); // For serving static files (uploads)
 const aiRouter = require('./routes/ai');
-const { aiQueue } = require('./queues/aiQueue'); // Ensure the AI queue is initialized
+const { aiQueue } = require('./queues/aiQueue'); // Import the AI queue for testing
 
 // Add this route registration:
 
