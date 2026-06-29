@@ -7,13 +7,13 @@
  * - Uses aiQueue for background processing
  * - Returns job ID for status tracking
  */
-const { aiQueue } = require('../queues/aiQueue');
-const { aiImageToImageQueue } = require('../queues/aiQueue');
+const { aiQueue, aiImageToImageQueue, aiWrapperCompositeQueue } = require('../queues/aiQueue');
 const sessionRepository = require('../repositories/sessionRepository');
 const { AI_JOB_TYPES } = require('../constants/aiJobs');
+const imageCompositeService = require('../services/imageCompositeService');
 
 /**
- * POST /api/v1/sessions/me/generate
+ * POST /api/v1/sessions/me/generate-image-from-image
  * Trigger AI image generation
  * Protected endpoint (requires JWT)
  * 
@@ -81,11 +81,13 @@ async function triggerAIGeneration({ req, res, queue, jobType }) {
         }
 
         // Add job to queue
+        console.log(jobType)
         const job = await queue.add(jobType.jobName, jobPayload);
 
         // Update session status to PROCESSING immediately
         await sessionRepository.updateStatusById(sessionId, 'PROCESSING', {
             aiJobId: job.id,
+            aiJobType: jobType.queueName // // NEW — remembers which queue this job lives in
         });
 
         console.log(`🎨 AI job added: ${job.id} for session ${sessionId} for user - `);
@@ -125,6 +127,35 @@ async function generateAIImageToImage(req, res, next) {
     });
 }
 
+async function generateAIWrapperComposite(req, res, next) {
+    /*
+triggerAIGeneration currently validates session.status !== 'UPLOADED'. 
+That's fine here since wrapper-composite also needs an uploaded source photo first. 
+But it has no awareness of productSku needing a valid entry in WRAPPER_OVERLAY_REGIONS 
+(from imageCompositeService.js). Right now, if a user picks a SKU you haven't configured a wrapper region for, 
+the job will queue successfully, the worker will pick it up, run the (costly) AI cartoonify step, 
+and then fail inside compositeOntoWrapper() when it throws No wrapper overlay region configured for SKU. 
+That's wasted inference spend on a failure you could have caught instantly.
+Worth adding a cheap pre-check in the controller before queuing:
+    */
+    const { sessionId } = req.user;
+    const session = await sessionRepository.findById(sessionId);
+
+    if (session && !imageCompositeService.hasRegionConfig(session.productSku)) {
+        return res.status(400).json({
+            success: false,
+            error: `No wrapper template configured for product: ${session.productSku}`,
+        });
+    }
+
+    return triggerAIGeneration({
+        req,
+        res,
+        queue: aiWrapperCompositeQueue,
+        jobType: AI_JOB_TYPES.WRAPPER_COMPOSITE,
+    });
+}
+
 /**
  * GET /api/v1/sessions/me/status/:aiJobId
  * Get AI job status
@@ -141,13 +172,52 @@ async function generateAIImageToImage(req, res, next) {
  *   }
  * }
  */
+
+const QUEUE_BY_NAME = {
+    [AI_JOB_TYPES.TEXT_TO_IMAGE.queueName]: aiQueue,
+    [AI_JOB_TYPES.IMAGE_TO_IMAGE.queueName]: aiImageToImageQueue,
+    [AI_JOB_TYPES.WRAPPER_COMPOSITE.queueName]: aiWrapperCompositeQueue,
+};
+
+/**
+ * GET /api/v1/sessions/me/status/:aiJobId
+ * Get AI job status
+ * Protected endpoint (requires JWT)
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     aiJobId: string,
+ *     status: string,
+ *     processedImageUrl: string (if DONE),
+ *     aiError: string (if FAILED),
+ *     jobState: string
+ *   }
+ * }
+ */
 async function getAIStatus(req, res, next) {
     try {
         const { aiJobId } = req.params;
         const { sessionId } = req.user;
 
-        // Get job from queue
-        const job = await aiQueue.getJob(aiJobId);
+        // Get session first — it tells us which queue this job belongs to
+        const session = await sessionRepository.findById(sessionId);
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                error: 'Session not found',
+            });
+        }
+
+        // Resolve the correct queue using the job type saved at trigger-time.
+        // Falls back to aiQueue only for backward compatibility with sessions
+        // created before aiJobType was introduced — remove this fallback once
+        // no pre-existing sessions rely on it.
+        const queue = QUEUE_BY_NAME[session.aiJobType] || aiQueue;
+
+        const job = await queue.getJob(aiJobId);
 
         if (!job) {
             return res.status(404).json({
@@ -156,11 +226,7 @@ async function getAIStatus(req, res, next) {
             });
         }
 
-        // Get job status
         const jobState = await job.getState();
-
-        // Get session for latest data
-        const session = await sessionRepository.findById(sessionId);
 
         res.json({
             success: true,
@@ -181,8 +247,10 @@ async function getAIStatus(req, res, next) {
     }
 }
 
+
 module.exports = {
     generateAIImage,
     generateAIImageToImage,
+    generateAIWrapperComposite,
     getAIStatus,
 };

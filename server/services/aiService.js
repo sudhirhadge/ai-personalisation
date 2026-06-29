@@ -14,6 +14,9 @@ const config = require('../config');
 const fs = require('fs');
 const path = require('path');
 
+const imageCompositeService = require('./imageCompositeService');
+
+
 // Initialize Hugging Face (free API key)
 const hf = new HfInference(config.huggingfaceApiKey);
 const inference = new InferenceClient(config.huggingfaceApiKey);
@@ -114,6 +117,16 @@ class AIService {
             const imageResponse = await fetch(originalImageUrl);
             const imageBlob = await imageResponse.blob();
 
+            const BYPASS_AI = true //  for development purpose
+            if (BYPASS_AI) {
+                return {
+                    success: true,
+                    imageData: await this._toBase64(imageBlob),
+                    mimeType: imageBlob.type,
+                    prompt,
+                };
+            }
+
             const imageBuffer = await inference.imageToImage({
                 // data: imageBlob,
                 // model: "timbrooks/instruct-pix2pix",
@@ -136,6 +149,7 @@ class AIService {
             this._handleInferenceError(error, 'image-to-image');
         }
     }
+
 
     /**
        * Shared workflow: generate -> upload -> shape response.
@@ -245,6 +259,66 @@ class AIService {
         } catch (error) {
             console.error('Upload generated image error:', error);
             throw error;
+        }
+    }
+
+
+    /**
+     * Full workflow: cartoonify the user's photo, then deterministically
+     * composite it onto the unmodified product wrapper.
+     * @param {string} sessionId
+     * @param {string} productSku
+     * @param {string} userPrompt
+     * @param {string} originalImageUrl
+     * @returns {Promise<Object>} Job result
+     */
+
+    // Main entry point for compositing 2 images. 
+    /*
+        Important notes before you wire this into a queue/controller
+
+        WRAPPER_OVERLAY_REGIONS coordinates need real measurement — 
+        open your actual Cadbury wrapper template in any editor, note where the label/photo area sits in pixels, 
+        and update top/left/width/height. I used placeholder numbers.
+        You need an actual wrapper template image file stored in assets/wrappers/ — 
+        a transparent-background-aware PNG of the wrapper with the label area empty 
+        (or with a placeholder you're overlaying onto).
+        fit: 'cover' crops the cartoon face to fill the box without stretching — 
+        if your label area isn't square, faces near the edges may get cropped. 
+        fit: 'contain' is the alternative if you'd rather show the whole face with padding instead.
+        This doesn't yet hook into your queue/controller — following your existing pattern, 
+        you'd add a new AI_JOB_TYPES.WRAPPER_COMPOSITE entry to constants/aiJobs.js, a new queue via createAIQueue(), and a controller wrapper, 
+        exactly like the text-to-image/image-to-image pattern you already have. Want me to write those three pieces out the same way?
+    */
+    async processWrapperComposite(sessionId, productSku, userPrompt, originalImageUrl) {
+        try {
+            // 1. Cartoonify the user's face (existing AI pipeline, unchanged)
+            const prompt = this.generateImageToImagePrompt(productSku, userPrompt);
+            const aiResult = await this.generateImageToImage(prompt, originalImageUrl);
+
+            // 2. Composite the cartoon face onto the real wrapper (deterministic, no AI)
+            const cartoonBuffer = Buffer.from(aiResult.imageData, 'base64');
+            const uploadResult = await imageCompositeService.compositeAndUpload(
+                sessionId,
+                productSku,
+                cartoonBuffer
+            );
+
+            return {
+                success: true,
+                processedImageUrl: uploadResult.url,
+                aiPrompt: prompt,
+                aiResult: {
+                    mimeType: 'image/png',
+                    size: uploadResult.size,
+                },
+            };
+        } catch (error) {
+            console.error('AI process wrapper composite error:', error);
+            return {
+                success: false,
+                error: error.message,
+            };
         }
     }
 }

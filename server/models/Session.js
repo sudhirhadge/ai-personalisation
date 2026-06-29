@@ -80,6 +80,10 @@ const sessionSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    aiJobType: {
+        type: String,
+        default: null
+    }
 }, {
     timestamps: true, // Adds createdAt and updatedAt automatically
 });
