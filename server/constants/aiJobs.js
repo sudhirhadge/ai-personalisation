@@ -22,6 +22,11 @@ const AI_JOB_TYPES = {
         jobName: 'ai-image-to-image-generation',
         requiresOriginalImage: true,
     },
+    WRAPPER_COMPOSITE: {
+        queueName: 'ai-wrapper-composite-generation',
+        jobName: 'ai-wrapper-composite-generation',
+        requiresOriginalImage: true, // still needs the user's source photo to cartoonify
+    },
 };
 
 module.exports = { AI_JOB_TYPES };

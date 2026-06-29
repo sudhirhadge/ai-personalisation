@@ -59,7 +59,7 @@ const IORedis = require('ioredis');
 const sessionRepository = require('../repositories/sessionRepository');
 const aiService = require('../services/aiService');
 const config = require('../config')
-const { AI_JOB_TYPES } = require('../constants/aiJobTypes');
+const { AI_JOB_TYPES } = require('../constants/aiJobs');
 
 // Initialize Upstash Redis Connection (free tier)
 // TODO: move this to src/lib/redis.js so both queues share one connection
@@ -191,9 +191,24 @@ const { queue: aiImageToImageQueue, worker: aiImageToImageWorker, shutdown: shut
         aiService.processImageToImageGeneration(sessionId, productSku, userPrompt, originalImageUrl),
 });
 
-// Graceful shutdown — closes both workers, then the shared Redis connection once
+// --- Wrapper composite queue (new) ---
+const {
+    queue: aiWrapperCompositeQueue,
+    worker: aiWrapperCompositeWorker,
+    shutdown: shutdownWrapperCompositeWorker,
+} = createAIQueue({
+    queueName: AI_JOB_TYPES.WRAPPER_COMPOSITE.queueName,
+    processFn: ({ sessionId, productSku, userPrompt, originalImageUrl }) =>
+        aiService.processWrapperComposite(sessionId, productSku, userPrompt, originalImageUrl),
+});
+
+// Graceful shutdown — closes all three workers, then the shared Redis connection once
 async function shutdownAllWorkers() {
-    await Promise.all([shutdownAiWorker(), shutdownImageToImageWorker()]);
+    await Promise.all([
+        shutdownAiWorker(),
+        shutdownImageToImageWorker(),
+        shutdownWrapperCompositeWorker(),
+    ]);
     await redisConnection.close();
 }
 
@@ -205,5 +220,7 @@ module.exports = {
     aiWorker,
     aiImageToImageQueue,
     aiImageToImageWorker,
+    aiWrapperCompositeQueue,
+    aiWrapperCompositeWorker,
     shutdownAllWorkers,
 };

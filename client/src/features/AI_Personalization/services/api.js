@@ -120,13 +120,13 @@ export const imageApi = {
 export const aiApi = {
     /**
      * Generate AI image
-     * POST /api/v1/sessions/me/generate
+     * POST /api/v1/sessions/me/generate-image-from-image
      * JWT token automatically attached by interceptor
      * @param {string} prompt - User's vision description
      * @returns {Promise<Object>}
      */
     generateImage: async (prompt) => {
-        const response = await api.post('/sessions/me/generate', { prompt });
+        const response = await api.post('/sessions/me/generate-image-from-image', { prompt });
         return response;
     },
 

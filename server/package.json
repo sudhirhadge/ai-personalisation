@@ -29,6 +29,7 @@
     "multer": "^2.2.0",
     "nodemailer": "^8.0.10",
     "npm": "^11.12.1",
+    "sharp": "^0.35.2",
     "supertest": "^7.0.0",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",

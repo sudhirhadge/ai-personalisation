@@ -13,7 +13,8 @@ const app = require('./app');
 const config = require('./config');
 const initStorage = require('./bootstrap/initStorage');
 const aiWorker = require('./queues/aiQueue'); // Ensure the AI worker is initialized
-const aiImageToImageQueue = require('./queues/aiQueue'); // Ensure the AI image worker is initialized
+const aiImageToImageWorker = require('./queues/aiQueue'); // Ensure the AI image worker is initialized
+const aiWrapperCompositeWorker = require('./queues/aiQueue')
 
 
 
