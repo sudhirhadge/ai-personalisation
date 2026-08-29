@@ -1,0 +1,18 @@
+{
+    "name": "ai-personalisation",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Repo-root dev tooling only (git hooks, formatting). App code lives in client/ and server/ as independent packages.",
+    "scripts": {
+        "prepare": "husky",
+        "lint:client": "npm --prefix client run lint",
+        "lint:server": "npm --prefix server run lint",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "devDependencies": {
+        "husky": "^9.1.7",
+        "lint-staged": "^15.5.0",
+        "prettier": "^3.9.6"
+    }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+client/build/
+server/build/
+uploads/
+coverage/
+package-lock.json
+*.md
