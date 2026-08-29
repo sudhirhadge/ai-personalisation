@@ -39,6 +39,7 @@ httpClient.interceptors.response.use(
     // handler to return an AxiosResponse, but we're intentionally changing
     // the runtime shape to the unwrapped payload — apiGet/apiPost/apiDelete
     // below re-cast that payload to the correct type T at each call site.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (response): any => {
         // A few endpoints (e.g. DELETE /sessions/me/image) can return HTTP 200
         // with { success: false, error } in the body rather than a non-2xx
@@ -69,7 +70,11 @@ export async function apiGet<T>(url: string): Promise<T> {
     return httpClient.get(url) as unknown as Promise<T>;
 }
 
-export async function apiPost<T>(url: string, body?: unknown, config?: Parameters<AxiosInstance['post']>[2]): Promise<T> {
+export async function apiPost<T>(
+    url: string,
+    body?: unknown,
+    config?: Parameters<AxiosInstance['post']>[2]
+): Promise<T> {
     return httpClient.post(url, body, config) as unknown as Promise<T>;
 }
 
