@@ -75,6 +75,26 @@ class ImageCompositeService {
     }
 
     /**
+     * List all configured wrapper templates for frontend consumption
+     * (session-creation SKU picker + wizard mode-availability checks).
+     * Only exposes fields safe for a public, unauthenticated response —
+     * templatePath is a local disk path and stays server-side.
+     * @returns {Array<{sku: string, previewUrl: string, region: {top: number, left: number, width: number, height: number}}>}
+     */
+    listRegions() {
+        return Object.entries(WRAPPER_OVERLAY_REGIONS).map(([sku, region]) => ({
+            sku,
+            previewUrl: region.publicUrl,
+            region: {
+                top: region.top,
+                left: region.left,
+                width: region.width,
+                height: region.height,
+            },
+        }));
+    }
+
+    /**
  * Get the publicly reachable wrapper URL for a given SKU.
  * Used by the BFL multi-reference path — BFL's servers fetch this URL
  * themselves, so it must be externally reachable (not localhost).
