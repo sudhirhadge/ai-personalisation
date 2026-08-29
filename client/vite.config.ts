@@ -1,7 +1,7 @@
 /**
  * Vite Configuration
  * Sets up React plugin and development server
- * 
+ *
  * Architectural Decision:
  * - Uses Vite for fast HMR and optimized builds
  * - Development proxy forwards API requests to backend
@@ -26,4 +26,4 @@ export default defineConfig({
         outDir: 'dist',
         sourcemap: true,
     },
-}); 
+});
