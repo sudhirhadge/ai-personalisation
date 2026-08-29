@@ -44,6 +44,9 @@ const config = {
         port: Number(process.env.REDIS_PORT) || 6379,
         password: process.env.REDIS_PASSWORD,
     },
+
+    // config.js — add alongside huggingfaceApiKey
+    blackForestLabsApiKey: process.env.BFL_API_KEY, // set in env in next PR
 };
 
 // Validate required environment variables in production

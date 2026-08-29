@@ -27,6 +27,23 @@ const AI_JOB_TYPES = {
         jobName: 'ai-wrapper-composite-generation',
         requiresOriginalImage: true, // still needs the user's source photo to cartoonify
     },
+
+    WRAPPER_COMPOSITE_MULTI_REF: {
+        queueName: 'ai-wrapper-composite-multiref-generation', // composite generation with multiple reference images (e.g. 2-3) , orignal image may slightly differ from the reference images, but the reference images are used to guide the style of the final output
+        jobName: 'ai-wrapper-composite-multiref-generation',
+        requiresOriginalImage: true,
+        /*
+        requiresWrapperImageUrl: true, // new flag — this job also needs the wrapper template's public URL
+
+        I added requiresWrapperImageUrl rather than overloading requiresOriginalImage — 
+        this job type genuinely needs two different inputs (user photo + wrapper URL), 
+        and your existing flag only tracked one boolean dimension. 
+        Squeezing a second requirement into the same flag would force the 
+        controller to guess; better to be explicit.
+        */
+        // requiresWrapperImageUrl removed — URL now resolved server-side from productSku
+        fixedPrompt: true, // this job type has a fixed prompt template, so the user doesn't provide free-text prompt. The prompt is generated in the worker based on the session and wrapper image.
+    },
 };
 
 module.exports = { AI_JOB_TYPES };

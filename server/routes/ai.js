@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { generateAIImage, getAIStatus, generateAIImageToImage, generateAIWrapperComposite } = require('../controllers/aiController');
+const { generateAIImage, getAIStatus, generateAIImageToImage, generateAIWrapperComposite, generateAIWrapperCompositeMultiRef } = require('../controllers/aiController');
 const { authenticate } = require('../middleware/authPersonlization');
 
 // All routes require JWT authentication
@@ -17,6 +17,7 @@ router.use(authenticate);
 router.post('/generate-image-from-prompt', generateAIImage);
 router.post('/generate-image-from-image', generateAIImageToImage);
 router.post('/generate-wrapper-composite', generateAIWrapperComposite);
+router.post('/generate-wrapper-composite-multiref', generateAIWrapperCompositeMultiRef);
 
 
 

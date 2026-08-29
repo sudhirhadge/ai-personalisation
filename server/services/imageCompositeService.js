@@ -30,15 +30,28 @@ const config = require('../config');
  *
  * TODO: move this to MongoDB (a WrapperTemplate collection) once you have
  * more than a handful of SKUs — a flat file won't scale past a few products.
+ * templatePath  — local disk path for sharp-based compositing (Option A)
+ * publicUrl     — publicly reachable URL for BFL multi-ref API (Option B)
+ *                 Must be a real public URL (not localhost) since BFL's
+ *                 servers fetch it server-side. Use your CDN/S3/deployed
+ *                 domain here, not a local path.
  */
 const WRAPPER_OVERLAY_REGIONS = {
-    'productRectangle': {
+    'generic-chocolate-placeholder': {
+        templatePath: path.join(process.cwd(), 'assets', 'wrappers', 'placeholder-wrapper-mockup.png'),
+        publicUrl: `${config.apiURL}/assets/wrappers/placeholder-wrapper-mockup.png`,
+        top: 220,
+        left: 120,
+        width: 360,
+        height: 360,
+    },
+    'generic-chocolate-placeholder-rectangular': {
         templatePath: path.join(process.cwd(), 'assets', 'wrappers', 'placeholder-wrapper-mockup-rectangular.png'),
+        publicUrl: `${config.apiURL}/assets/wrappers/placeholder-wrapper-mockup-rectangular.png`,
         top: 150,
         left: 320,
         width: 360,
         height: 200,
-        // Optional: corner radius / mask shape could go here later (e.g. rounded label edges)
     },
     // Add additional SKUs here as you onboard more wrapper designs.
 };
@@ -59,6 +72,29 @@ class ImageCompositeService {
     }
     hasRegionConfig(productSku) {
         return Boolean(WRAPPER_OVERLAY_REGIONS[productSku]);
+    }
+
+    /**
+ * Get the publicly reachable wrapper URL for a given SKU.
+ * Used by the BFL multi-reference path — BFL's servers fetch this URL
+ * themselves, so it must be externally reachable (not localhost).
+ *
+ * @param {string} productSku
+ * @returns {string} public URL
+ * @throws {Error} if SKU has no configured wrapper or no publicUrl set
+ */
+    getWrapperPublicUrl(productSku) {
+        const region = this._getRegionConfig(productSku); // already throws if SKU unknown
+
+        if (!region.publicUrl) {
+            throw new Error(
+                `No publicUrl configured for SKU: ${productSku}. ` +
+                `Add a publicUrl to WRAPPER_OVERLAY_REGIONS for this SKU before ` +
+                `using the multi-reference BFL path.`
+            );
+        }
+
+        return region.publicUrl;
     }
 
     /**
