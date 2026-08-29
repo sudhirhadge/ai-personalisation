@@ -202,12 +202,29 @@ const {
         aiService.processWrapperComposite(sessionId, productSku, userPrompt, originalImageUrl),
 });
 
+// --- Wrapper composite (multi-reference via BFL) queue ---
+const {
+    queue: aiWrapperCompositeMultiRefQueue,
+    worker: aiWrapperCompositeMultiRefWorker,
+    shutdown: shutdownWrapperCompositeMultiRefWorker,
+} = createAIQueue({
+    queueName: AI_JOB_TYPES.WRAPPER_COMPOSITE_MULTI_REF.queueName,
+    // processFn: ({ sessionId, productSku, originalImageUrl, wrapperImageUrl }) =>
+    //     aiService.processWrapperCompositeMultiRef(sessionId, productSku, originalImageUrl, wrapperImageUrl),
+    //wrapperImageUrl is gone; service resolves it from productSku
+    processFn: ({ sessionId, productSku, originalImageUrl }) =>
+        aiService.processWrapperCompositeMultiRef(sessionId, productSku, originalImageUrl),
+
+
+});
+
 // Graceful shutdown — closes all three workers, then the shared Redis connection once
 async function shutdownAllWorkers() {
     await Promise.all([
         shutdownAiWorker(),
         shutdownImageToImageWorker(),
         shutdownWrapperCompositeWorker(),
+        shutdownWrapperCompositeMultiRefWorker(),
     ]);
     await redisConnection.close();
 }
@@ -222,5 +239,19 @@ module.exports = {
     aiImageToImageWorker,
     aiWrapperCompositeQueue,
     aiWrapperCompositeWorker,
+    aiWrapperCompositeMultiRefQueue,
+    aiWrapperCompositeMultiRefWorker,
     shutdownAllWorkers,
 };
+
+/*
+One thing worth flagging on the worker side: BFL's polling can take up to 60 seconds per 
+our earlier service code, plus your existing limiter: { max: 2, duration: 1000 } 
+caps concurrent jobs at 2/sec across all jobs processed by this worker 
+— that's fine for throughput, but if a single BFL job sits in pollUntilReady() for 
+50+ seconds, it's occupying one of your 2 concurrent slots the whole time. 
+Worth keeping an eye on queue depth once this is live; if BFL jobs back up behind 
+each other, you may want a higher concurrency limit specifically for this queue 
+(BullMQ lets you set limiter per-worker, so it doesn't have to match your other 
+three queues' limiter math).
+*/

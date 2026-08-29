@@ -7,7 +7,7 @@
  * - Uses Hugging Face free tier (30k tokens/month)
  * - Prompt generation: product SKU + user input
  * - Returns generated image URL for storage
- */
+*/
 const { HfInference, InferenceClient } = require('@huggingface/inference');
 const storageService = require('./storageService');
 const config = require('../config');
@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const imageCompositeService = require('./imageCompositeService');
+const blackForestLabsService = require('./blackForestLabsService');
 
 
 // Initialize Hugging Face (free API key)
@@ -107,6 +108,7 @@ class AIService {
 
     /**
     * Generate image-to-image transformation using FLUX.1 Kontext
+    * This method is used for all three servies: image-to-image, wrapper composite, and multi-reference composite via AI.
     * @param {string} prompt - AI prompt
     * @param {string} originalImageUrl - URL of the uploaded source image
     * @returns {Promise<Object>} Generated image data
@@ -275,7 +277,7 @@ class AIService {
 
     // Main entry point for compositing 2 images. 
     /*
-        Important notes before you wire this into a queue/controller
+        Important notes before we wire this into a queue/controller
 
         WRAPPER_OVERLAY_REGIONS coordinates need real measurement — 
         open your actual Cadbury wrapper template in any editor, note where the label/photo area sits in pixels, 
@@ -321,6 +323,102 @@ class AIService {
             };
         }
     }
+
+
+    // Inside the AIService class:
+
+    /**
+     * Multi-reference variant of wrapper compositing: instead of the
+     * deterministic sharp overlay, this asks FLUX.2 to render the cartoon
+     * face directly onto the wrapper image via BFL's multi-reference API.
+     *
+     * Tradeoff vs processWrapperComposite (sharp-based):
+     * - More natural-looking blend (lighting/perspective handled by the model)
+     * - Wrapper text/logo may shift or blur slightly — NOT guaranteed pixel-faithful
+     * - Higher cost (megapixel-based BFL pricing vs free local compositing)
+     * - Needs a review/regenerate step in the UX since output isn't deterministic
+     *
+     * @param {string} sessionId
+     * @param {string} productSku
+     * @param {string} originalImageUrl - user's uploaded photo (publicly reachable URL)
+     * @param {string} wrapperImageUrl - product wrapper template (publicly reachable URL)
+     * @returns {Promise<Object>} Job result
+    */
+    // async processWrapperCompositeMultiRef(sessionId, productSku, originalImageUrl, wrapperImageUrl) {
+    // ↑ wrapperImageUrl is no longer a parameter — it comes from productSku
+    async processWrapperCompositeMultiRef(sessionId, productSku, originalImageUrl) {
+        try {
+            // 1. Look up the wrapper's public URL server-side from productSku.
+            //    This is the same pattern as WRAPPER_OVERLAY_REGIONS for the
+            //    sharp path — the URL is never trusted from the client.
+            //    Throws immediately if productSku has no configured wrapper,
+            //    before any paid AI call is made.
+
+            /*
+The important design insight here — and why this is worth understanding for senior-level backend work — 
+is that the client should never be the source of truth for server-side resource URLs. 
+The client tells you what (a productSku, a user intent) — the server decides which actual resource that maps to. 
+This same principle applies to file paths, S3 keys, internal service URLs — anything the server acts on that could 
+be abused if the client controlled the value directly.
+            */
+            const wrapperImageUrl = imageCompositeService.getWrapperPublicUrl(productSku);
+
+            // 1. Cartoonify the user's face first (existing pipeline, unchanged)
+            const cartoonPrompt = this.generateImageToImagePrompt(productSku, '');
+            const cartoonResult = await this.generateImageToImage(cartoonPrompt, originalImageUrl);
+
+            // 2. Upload the cartoon result somewhere publicly reachable —
+            // BFL needs a URL, not a base64 blob, for input_image_2.
+            const cartoonUpload = await this.uploadGeneratedImage(
+                {
+                    filename: `cartoon-intermediate-${sessionId}-${Date.now()}.png`,
+                    size: Math.floor(cartoonResult.imageData.length * 0.75),
+                    mimetype: cartoonResult.mimeType,
+                },
+                cartoonResult.imageData,
+                sessionId
+            );
+
+            // 3. Multi-reference composite via BFL: image 1 = wrapper, image 2 = cartoon face
+            const multiRefPrompt =
+                'Apply the cartoon-style face from image 2 onto the printed label area ' +
+                'of the product in image 1, preserving the product\'s shape, color, and branding.';
+
+            const finalBuffer = await blackForestLabsService.generateMultiReference(
+                multiRefPrompt,
+                [wrapperImageUrl, cartoonUpload.url]
+            );
+
+            // 4. Save final result using the same upload pattern as everything else
+            const fileName = `wrapper-composite-mr-${sessionId}-${Date.now()}.png`;
+            const uploadResult = await this.uploadGeneratedImage(
+                { filename: fileName, size: finalBuffer.length, mimetype: 'image/png' },
+                finalBuffer.toString('base64'),
+                sessionId
+            );
+
+            return {
+                success: true,
+                processedImageUrl: uploadResult.url,
+                aiPrompt: multiRefPrompt,
+                aiResult: { mimeType: 'image/png', size: uploadResult.size },
+            };
+        } catch (error) {
+            console.error('AI process wrapper composite (multi-ref) error:', error);
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 module.exports = new AIService();
+
+/*
+
+Things you need to handle that don't exist in your current pipeline
+
+wrapperImageUrl must be a publicly reachable URL (not localhost) — BFL's servers fetch it themselves, server-side, so http://localhost:5000/... won't work once deployed; needs to be a real public URL (S3, Cloudflare R2, or your deployed domain).
+No HF billing dashboard for this — you'll need a separate BFL account, API key, and credit top-up (their docs mention a minimum ~$10 top-up). This is genuinely a new vendor relationship, exactly as flagged before you chose this path.
+Polling adds latency variance — unlike your current single-await HF calls, this could take anywhere from a few seconds to the full 60s timeout depending on BFL's queue. Your existing BullMQ job timeout settings (if any) should account for this.
+The 10-minute delivery URL expiry is a real failure mode — if your downloadResult() step is slow (network hiccup, large image) you could lose the result entirely and have to regenerate (cost incurred twice). Worth wrapping downloadResult in a quick retry.
+
+*/
