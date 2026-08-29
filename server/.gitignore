@@ -12,3 +12,6 @@ server/build/
 *.log
 
 .vercel
+
+# Test coverage output
+coverage/

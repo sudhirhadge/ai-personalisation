@@ -1,16 +1,15 @@
-
 /**
  * AI Queue (BullMQ + Upstash Redis)
  * Background job processing for AI image generation
  * Other queses can be added later (e.g. for email, notifications, etc.).
- * Alternative queues: Bee-Queue, Kue, Bull (BullMQ is the newer version of Bull). , 
+ * Alternative queues: Bee-Queue, Kue, Bull (BullMQ is the newer version of Bull). ,
  * and RabbitMQ (more complex, requires a separate server).
- * 
+ *
  * in amazon aws we can use SQS (Simple Queue Service) for queue management, but it is not free.
  * in gcp we can use Pub/Sub for queue management, but it is not free.
  * in azure we can use Service Bus for queue management, but it is not free.
- * 
- * 
+ *
+ *
  * Architectural Decision:
  * - Uses BullMQ for production-grade queue
  * - Upstash Redis (free 50MB) for queue storage
@@ -58,7 +57,7 @@ const { Queue, Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const sessionRepository = require('../repositories/sessionRepository');
 const aiService = require('../services/aiService');
-const config = require('../config')
+const config = require('../config');
 const { AI_JOB_TYPES } = require('../constants/aiJobs');
 
 // Initialize Upstash Redis Connection (free tier)
@@ -67,11 +66,17 @@ const { AI_JOB_TYPES } = require('../constants/aiJobs');
 const redisConnection = new IORedis({
     // host: config.redisHost,
     // port: config.redisPort,
-    // password: config.redisPassword, // host + port + password these key names can not be chnaged , 
+    // password: config.redisPassword, // host + port + password these key names can not be chnaged ,
     ...config.redisConfig,
     tls: {},
     maxRetriesPerRequest: null, // Required by BullMQ
     // Upstash/BullMQ connection examples use TLS and maxRetriesPerRequest: null.
+    // Tried `lazyConnect: true` here to defer connecting until a command
+    // actually runs (for test isolation) — didn't help: BullMQ's Queue/Worker
+    // constructors force an eager connection + health check (the "Eviction
+    // policy" log line) regardless of this option. Real fix for tests is
+    // jest.mock('../queues/aiQueue') so this module's real body never runs —
+    // see queues/__mocks__/aiQueue.js.
 });
 
 // default job options for BullMQ queues
@@ -87,7 +92,7 @@ const defaultJobOptions = {
 
 // BullMQ rate limiter: max 2 jobs per second
 const defaultLimiter = {
-    max: 2,        // Max concurrent jobs
+    max: 2, // Max concurrent jobs
     duration: 1000, // Per second
 };
 
@@ -110,52 +115,56 @@ function createAIQueue({ queueName, processFn }) {
         defaultJobOptions,
     });
 
-    const worker = new Worker(queueName, async (job) => {
-        const { sessionId } = job.data;
+    const worker = new Worker(
+        queueName,
+        async (job) => {
+            const { sessionId } = job.data;
 
-        console.log(`🔄 Processing AI job: ${job.id} for session ${sessionId}`);
+            console.log(`🔄 Processing AI job: ${job.id} for session ${sessionId}`);
 
-        try {
-            // Update session status to PROCESSING
-            await sessionRepository.updateStatusById(sessionId, 'PROCESSING', {
-                aiJobId: job.id,
-            });
-
-            // Call the provided processFn to handle the AI generation logic
-            const result = await processFn(job.data);
-
-            if (result.success) {
-                // Update session status to DONE with result data
-                await sessionRepository.updateStatusById(sessionId, 'DONE', {
-                    processedImageUrl: result.processedImageUrl,
-                    aiPrompt: result.aiPrompt,
-                    aiResult: result.aiResult,
-                    aiProcessedAt: new Date().toISOString(),
+            try {
+                // Update session status to PROCESSING
+                await sessionRepository.updateStatusById(sessionId, 'PROCESSING', {
+                    aiJobId: job.id,
                 });
 
-                console.log(`✅ AI job completed: ${job.id}`);
-                return result;
-            } else {
-                await sessionRepository.updateStatusById(sessionId, 'FAILED', {
-                    aiError: result.error,
-                });
-                throw new Error(result.error);
+                // Call the provided processFn to handle the AI generation logic
+                const result = await processFn(job.data);
+
+                if (result.success) {
+                    // Update session status to DONE with result data
+                    await sessionRepository.updateStatusById(sessionId, 'DONE', {
+                        processedImageUrl: result.processedImageUrl,
+                        aiPrompt: result.aiPrompt,
+                        aiResult: result.aiResult,
+                        aiProcessedAt: new Date().toISOString(),
+                    });
+
+                    console.log(`✅ AI job completed: ${job.id}`);
+                    return result;
+                } else {
+                    await sessionRepository.updateStatusById(sessionId, 'FAILED', {
+                        aiError: result.error,
+                    });
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error(`❌ AI job failed: ${job.id}`, error);
+                const session = await sessionRepository.findById(sessionId);
+                if (session.status !== 'FAILED') {
+                    await sessionRepository.updateStatusById(sessionId, 'FAILED', {
+                        aiError: error.message,
+                    });
+                }
+
+                throw error;
             }
-        } catch (error) {
-            console.error(`❌ AI job failed: ${job.id}`, error);
-            const session = await sessionRepository.findById(sessionId);
-            if (session.status !== 'FAILED') {
-                await sessionRepository.updateStatusById(sessionId, 'FAILED', {
-                    aiError: error.message,
-                });
-            }
-
-            throw error;
+        },
+        {
+            connection: redisConnection,
+            limiter: defaultLimiter,
         }
-    }, {
-        connection: redisConnection,
-        limiter: defaultLimiter,
-    });
+    );
 
     worker.on('completed', (job) => {
         console.log(`✅ Job completed: ${job.id}`);
@@ -178,17 +187,30 @@ function createAIQueue({ queueName, processFn }) {
 }
 
 // --- Text-to-image queue ---
-const { queue: aiQueue, worker: aiWorker, shutdown: shutdownAiWorker } = createAIQueue({
+const {
+    queue: aiQueue,
+    worker: aiWorker,
+    shutdown: shutdownAiWorker,
+} = createAIQueue({
     queueName: AI_JOB_TYPES.TEXT_TO_IMAGE.queueName,
     processFn: ({ sessionId, productSku, userPrompt }) =>
         aiService.processGeneration(sessionId, productSku, userPrompt),
 });
 
 // --- Image-to-image queue ---
-const { queue: aiImageToImageQueue, worker: aiImageToImageWorker, shutdown: shutdownImageToImageWorker } = createAIQueue({
+const {
+    queue: aiImageToImageQueue,
+    worker: aiImageToImageWorker,
+    shutdown: shutdownImageToImageWorker,
+} = createAIQueue({
     queueName: AI_JOB_TYPES.IMAGE_TO_IMAGE.queueName,
     processFn: ({ sessionId, productSku, userPrompt, originalImageUrl }) =>
-        aiService.processImageToImageGeneration(sessionId, productSku, userPrompt, originalImageUrl),
+        aiService.processImageToImageGeneration(
+            sessionId,
+            productSku,
+            userPrompt,
+            originalImageUrl
+        ),
 });
 
 // --- Wrapper composite queue (new) ---
@@ -214,8 +236,6 @@ const {
     //wrapperImageUrl is gone; service resolves it from productSku
     processFn: ({ sessionId, productSku, originalImageUrl }) =>
         aiService.processWrapperCompositeMultiRef(sessionId, productSku, originalImageUrl),
-
-
 });
 
 // Graceful shutdown — closes all three workers, then the shared Redis connection once
