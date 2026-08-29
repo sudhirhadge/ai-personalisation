@@ -80,6 +80,20 @@ class AIService {
     }
 
     /**
+     * Dev-only stand-in image for generateImage's bypass path. Unlike
+     * generateImageToImage (which can just echo the uploaded photo back),
+     * text-to-image has no source image to echo — so bypass mode reads a
+     * fixed placeholder from disk instead, to exercise the full
+     * generate -> upload -> poll -> result UI flow without an HF call.
+     * @returns {Promise<{imageData: string, mimeType: string}>}
+     */
+    async _getBypassPlaceholderImage() {
+        const placeholderPath = path.join(process.cwd(), 'assets', 'wrappers', 'placeholder-wrapper-mockup.png');
+        const buffer = fs.readFileSync(placeholderPath);
+        return { imageData: buffer.toString('base64'), mimeType: 'image/png' };
+    }
+
+    /**
         * Generate image using Hugging Face Stable Diffusion XL
         * @param {string} prompt - AI prompt
         * @returns {Promise<Object>} Generated image data
@@ -87,6 +101,11 @@ class AIService {
     async generateImage(prompt) {
         try {
             console.log('🎨 Generating image with prompt:', prompt);
+
+            if (config.bypassAi) {
+                const placeholder = await this._getBypassPlaceholderImage();
+                return { success: true, ...placeholder, prompt };
+            }
 
             const imageBuffer = await hf.textToImage({
                 model: 'stabilityai/stable-diffusion-xl-base-1.0',
@@ -119,8 +138,7 @@ class AIService {
             const imageResponse = await fetch(originalImageUrl);
             const imageBlob = await imageResponse.blob();
 
-            const BYPASS_AI = true //  for development purpose
-            if (BYPASS_AI) {
+            if (config.bypassAi) {
                 return {
                     success: true,
                     imageData: await this._toBase64(imageBlob),
@@ -366,6 +384,26 @@ be abused if the client controlled the value directly.
             // 1. Cartoonify the user's face first (existing pipeline, unchanged)
             const cartoonPrompt = this.generateImageToImagePrompt(productSku, '');
             const cartoonResult = await this.generateImageToImage(cartoonPrompt, originalImageUrl);
+
+            // Dev-only: skip the paid BFL multi-reference call entirely and
+            // fall back to the deterministic sharp-based composite (the same
+            // path processWrapperComposite uses) — it's a meaningful result
+            // (the actual cartoon face placed in the actual wrapper region),
+            // not just a static placeholder, and costs nothing.
+            if (config.bypassAi) {
+                const cartoonBuffer = Buffer.from(cartoonResult.imageData, 'base64');
+                const uploadResult = await imageCompositeService.compositeAndUpload(
+                    sessionId,
+                    productSku,
+                    cartoonBuffer
+                );
+                return {
+                    success: true,
+                    processedImageUrl: uploadResult.url,
+                    aiPrompt: cartoonPrompt,
+                    aiResult: { mimeType: 'image/png', size: uploadResult.size },
+                };
+            }
 
             // 2. Upload the cartoon result somewhere publicly reachable —
             // BFL needs a URL, not a base64 blob, for input_image_2.

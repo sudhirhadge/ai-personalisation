@@ -37,6 +37,16 @@ const config = {
     // AI Configuration (Phase 3)
     huggingfaceApiKey: process.env.HUGGINGFACE_API_KEY || '',
 
+    // Dev-only: skip the real HF/BFL inference calls across all 4 generation
+    // modes (aiService.js checks this in generateImage, generateImageToImage,
+    // and processWrapperCompositeMultiRef) and return a cheap stand-in result
+    // instead — a placeholder image, the echoed source photo, or the free
+    // deterministic sharp composite. Lets you exercise the full
+    // upload -> generate -> poll -> result UI flow without spending API
+    // credits. Must default to false so a missing/unset env var never
+    // silently disables real generation in production.
+    bypassAi: process.env.BYPASS_AI === 'true',
+
     // Redis Configuration (Upstash - Free tier)
     // do not change keys here, as the aiQueue.js expects redisConfig to be an object with host, port, password keys. This is designed to be easily passed to ioredis.
     redisConfig: {
