@@ -1,7 +1,7 @@
 /**
  * Token Service
  * Handles JWT token generation and validation for deep-links
- * 
+ *
  * Architectural Decision:
  * - Separates token logic from controller for testability
  * - Tokens contain minimal data (session ID) for security
@@ -50,9 +50,9 @@ class TokenService {
             return decoded;
         } catch (error) {
             if (error.name === 'TokenExpiredError') {
-                throw new Error('Token has expired');
+                throw new Error('Token has expired', { cause: error });
             }
-            throw new Error('Invalid token');
+            throw new Error('Invalid token', { cause: error });
         }
     }
 }
