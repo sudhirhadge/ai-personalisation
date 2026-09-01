@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint:client)",
+      "Bash(npm run lint:server)",
+      "Bash(npm run format)",
+      "Bash(npm run format:check)",
+      "Bash(npm test)",
+      "Bash(npm run test)",
+      "Bash(npm --prefix client test)",
+      "Bash(npm --prefix client run test)",
+      "Bash(npm --prefix server test)",
+      "Bash(npm --prefix server run test)",
+      "Bash(npm --prefix client run dev)",
+      "Bash(npm --prefix server run dev)",
+      "Bash(cd client && npm test)",
+      "Bash(cd server && npm test)",
+      "Bash(cd client && npm run dev)",
+      "Bash(cd server && npm run dev)"
+    ]
+  }
+}
