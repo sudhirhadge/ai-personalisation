@@ -109,6 +109,13 @@ async function createSession(req, res, next) {
  *     status: string,
  *     personalizationLink: string,
  *     createdAt: string,
+ *     updatedAt: string,
+ *     originalImageUrl: string | null,
+ *     originalImageName: string | null,
+ *     aiJobId: string | null,
+ *     aiJobType: string | null,
+ *     processedImageUrl: string | null,
+ *     aiError: string | null,
  *   }
  * }
  */
@@ -125,6 +132,12 @@ async function getCurrentSession(req, res, next) {
                 error: 'Session not found',
             });
         }
+        // Always return image/job/result fields (null until set, per the Session
+        // model's own defaults) rather than gating on status. Previously these were
+        // only attached for status === 'UPLOADED', which meant a page refresh mid-
+        // PROCESSING, or reopening a personalization link after DONE/FAILED, lost
+        // the job reference entirely — the frontend had no way to resume/show the
+        // result from GET /sessions/me alone.
         let data = {
             sessionId: session._id.toString(),
             email: session.email,
@@ -133,11 +146,12 @@ async function getCurrentSession(req, res, next) {
             personalizationLink: session.personalizationLink,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
-        }
-        if (session.status === 'UPLOADED') {
-            // Include originalImageUrl only if the session has an uploaded image
-            data.originalImageUrl = session.originalImageUrl;
-            data.originalImageName = session.originalImageName;
+            originalImageUrl: session.originalImageUrl,
+            originalImageName: session.originalImageName,
+            aiJobId: session.aiJobId,
+            aiJobType: session.aiJobType,
+            processedImageUrl: session.processedImageUrl,
+            aiError: session.aiError,
         }
 
         res.json({

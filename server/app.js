@@ -19,6 +19,7 @@ const swaggerSpec = require("./swagger/swagger");
 const storageRouter = require('./routes/storage');  // phase 2: storage routes
 const path = require('path'); // For serving static files (uploads)
 const aiRouter = require('./routes/ai');
+const wrapperTemplatesRouter = require('./routes/wrapperTemplates'); // public wrapper-template catalog
 const { aiQueue } = require('./queues/aiQueue'); // Import the AI queue for testing
 
 // Add this route registration:
@@ -58,6 +59,8 @@ if (config.nodeEnv === 'development') {
 app.use('/api/v1/sessions', sessionsRouter);
 // Phase 2: Storage routes for image upload/delete
 app.use('/api/v1/sessions/me', storageRouter);
+// Public wrapper-template catalog (no auth — used by the frontend's SKU/template picker)
+app.use('/api/v1/products', wrapperTemplatesRouter);
 
 // for testing the queue, we can add a simple endpoint to enqueue a test job. This is not meant for production use, but can be helpful during development to verify that the queue is working correctly.
 app.get('/health/queue', async (req, res) => {
@@ -75,6 +78,8 @@ app.use('/api/v1/sessions/me', aiRouter);
 
 // Serve uploaded files statically (for frontend access)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve wrapper template preview images statically (for frontend access + BFL multi-ref fetch)
+app.use('/assets', express.static(path.join(process.cwd(), 'assets')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
